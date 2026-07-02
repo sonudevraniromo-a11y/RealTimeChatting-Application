@@ -2,62 +2,66 @@ import { useState, useEffect, useRef } from "react";
 import "./Message.css";
 import api from "../Services/api";
 
-
-function Message({ message, currentUserId, openImage , setMessages , setReplyMessage}) {
+function Message({
+  message,
+  currentUserId,
+  openImage,
+  setMessages,
+  setReplyMessage,
+}) {
   const isMe = message.sender._id === currentUserId;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const [hover, setHover] = useState(false);
 
-  async function handleDeleteForMe(){
-      try {
-        await api.patch(`/api/message/${message._id}/delete-for-me`);
+  async function handleDeleteForMe() {
+    try {
+      await api.patch(`/api/message/${message._id}/delete-for-me`);
 
-        setMessages((prev) => prev.filter((m) => m._id !== message._id));
+      setMessages((prev) => prev.filter((m) => m._id !== message._id));
 
-        setMenuOpen(false);
-      } catch (err) {
-        console.log(err);
-      }
-  }
-
-  async function handleDeleteForEveryone(){
-     try {
-       await api.patch(`/api/message/${message._id}/delete-for-everyone`);
-
-       setMessages((prev) =>
-         prev.map((m) =>
-           m._id === message._id
-             ? {
-                 ...m,
-                 deletedForEveryone: true,
-                 text: "",
-                 image: "",
-               }
-             : m,
-         ),
-       );
-
-       setMenuOpen(false);
-     } catch (err) {
-       console.log(err);
-     }
-  }
-
-
-useEffect(() => {
-  function handleClickOutside(e) {
-    if (menuRef.current && !menuRef.current.contains(e.target)) {
       setMenuOpen(false);
+    } catch (err) {
+      console.log(err);
     }
   }
 
-  document.addEventListener("mousedown", handleClickOutside);
+  async function handleDeleteForEveryone() {
+    try {
+      await api.patch(`/api/message/${message._id}/delete-for-everyone`);
 
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, []);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === message._id
+            ? {
+                ...m,
+                deletedForEveryone: true,
+                text: "",
+                image: "",
+              }
+            : m,
+        ),
+      );
+
+      setMenuOpen(false);
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   if (message.deletedForEveryone) {
     return (
@@ -92,7 +96,6 @@ useEffect(() => {
       </div>
     );
   }
-
 
   return (
     <div
@@ -254,11 +257,11 @@ useEffect(() => {
 
           {message.image && (
             <img
-              src={`http://localhost:5000${message.image}`}
+              src={`import.meta.env.VITE_API_URL${message.image}`}
               alt=""
               onClick={(e) => {
                 e.stopPropagation();
-                openImage(`http://localhost:5000${message.image}`);
+                openImage(`import.meta.env.VITE_API_URL${message.image}`);
               }}
               style={{
                 width: "100%",

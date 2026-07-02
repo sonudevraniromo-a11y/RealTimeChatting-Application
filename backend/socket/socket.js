@@ -6,7 +6,7 @@ const { setIO } = require("./io");
 function initializeSocket(server) {
   const io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: `${process.env.CLIENT_URL}`,
       credentials: true,
     },
   });
@@ -48,8 +48,6 @@ function initializeSocket(server) {
         io.to(receiverSocket).emit("stop_typing");
       }
     });
-
-    
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);

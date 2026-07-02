@@ -1,8 +1,13 @@
-const User = require('../models/userSchema') ;
-const bcrypt = require('bcrypt')
-const {generateAccessToken , generateRefreshToken , verifyAccessToken , verifyRefreshToken} = require('../services/tokenService')
-const crypto = require('crypto')
-const transporter = require("../services/emailService")
+const User = require("../models/userSchema");
+const bcrypt = require("bcrypt");
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+} = require("../services/tokenService");
+const crypto = require("crypto");
+const transporter = require("../services/emailService");
 
 exports.login = async (req, res) => {
   try {
@@ -57,10 +62,9 @@ exports.login = async (req, res) => {
     });
   }
 };
-    
+
 exports.register = async (req, res) => {
   try {
-
     const { name, email, password } = req.body;
 
     const existingUser = await User.findOne({ email });
@@ -85,7 +89,7 @@ exports.register = async (req, res) => {
 
     await user.save();
 
-    const verifyLink = `http://localhost:5173/verify-email/${token}`;
+    const verifyLink = `${process.env.CLIENT_URL}/verify-email/${token}`;
     await transporter.sendMail({
       from: process.env.EMAIL,
       to: user.email,
@@ -109,200 +113,198 @@ exports.register = async (req, res) => {
   }
 };
 
-exports.refresh = async (req , res ) => {
-    const refreshToken = req.cookies.refreshToken ;
+exports.refresh = async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
 
-    if(!refreshToken){
-        return res.status(401).json({
-            message : "no refresh token"
-        })
+  if (!refreshToken) {
+    return res.status(401).json({
+      message: "no refresh token",
+    });
+  }
+
+  try {
+    const decoded = verifyRefreshToken(refreshToken);
+
+    const user = await User.findOne({
+      _id: decoded.userId,
+      refreshTokens: refreshToken,
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        message: "refresh token revoked",
+      });
     }
 
-    try{
-        const decoded = verifyRefreshToken(refreshToken) ;
+    console.log("new access token generated ");
 
-        const user = await User.findOne({
-          _id: decoded.userId,
-          refreshTokens: refreshToken,
-        });
+    const accessToken = generateAccessToken(user);
 
-        if(!user){
-            return res.status(401).json({
-                message : "refresh token revoked"
-            })
-        }
-
-        console.log("new access token generated ") ;
-
-        const accessToken = generateAccessToken(user) ;
-
-        res.json({
-            accessToken ,
-        }) ;
-        
-    }catch(err){
-         console.error("Refresh error:", err.message);
-         res.status(403).json({
-           message: "Invalid refresh token",
-           error: err.message,
-         });
-    }
+    res.json({
+      accessToken,
+    });
+  } catch (err) {
+    console.error("Refresh error:", err.message);
+    res.status(403).json({
+      message: "Invalid refresh token",
+      error: err.message,
+    });
+  }
 };
 
-exports.profile = async(req , res ) => {
-    try{
-        const user = await User.findById(req.user.userId) ;
+exports.profile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
 
-        if(!user){
-            return res.status(404).json({
-                message : "userNotFound"
-            })
-        }
-
-        res.json({
-            message : "wellcome" ,
-            user : {
-                name : user.name , 
-                email : user.email , 
-                role : user.role 
-            } ,
-        });
-
-    }catch(err){
-        res.status(500).json({
-            message : "server error" ,
-            error : err.message ,
-        }) ;
+    if (!user) {
+      return res.status(404).json({
+        message: "userNotFound",
+      });
     }
-}
 
-exports.logOutAll = async(req ,res ) => {
-    const user = await User.findById(req.user.userId) ;
-
-    user.refreshTokens = [] ;
-
-    await user.save() ;
-    res.clearCookie("refreshToken")
-    
     res.json({
-        message : "logged Out from all Devices " ,
-    })
-}
+      message: "wellcome",
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "server error",
+      error: err.message,
+    });
+  }
+};
 
-exports.logOut = async (req , res) => {
-    const refreshToken = req.cookies.refreshToken ;
+exports.logOutAll = async (req, res) => {
+  const user = await User.findById(req.user.userId);
 
-    if(refreshToken){
-        const decoded = verifyRefreshToken(refreshToken);
+  user.refreshTokens = [];
 
-        const user = await User.findById(decoded.userId) ;
+  await user.save();
+  res.clearCookie("refreshToken");
 
-        if(user){
-            user.refreshTokens = user.refreshTokens.filter(
-                (token) => token != refreshToken ,
-            ) ;
+  res.json({
+    message: "logged Out from all Devices ",
+  });
+};
 
-            await user.save() ;
-        }
+exports.logOut = async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
 
-        res.clearCookie("refreshToken") ;
-        res.json({
-            message : "logged Out Successfully"
-        })
+  if (refreshToken) {
+    const decoded = verifyRefreshToken(refreshToken);
+
+    const user = await User.findById(decoded.userId);
+
+    if (user) {
+      user.refreshTokens = user.refreshTokens.filter(
+        (token) => token != refreshToken,
+      );
+
+      await user.save();
     }
-}
 
-exports.forgotPassword = async (req , res) => {
-    try{
-        const {email} = req.body ; 
-        const user = await User.findOne({email ,});
+    res.clearCookie("refreshToken");
+    res.json({
+      message: "logged Out Successfully",
+    });
+  }
+};
 
-        if(!user){
-            return res.status(404).json({
-                message : "user not found from forgotPassword"
-            })
-        }
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
 
-        const resetToken = crypto.randomBytes(32).toString("hex");
+    if (!user) {
+      return res.status(404).json({
+        message: "user not found from forgotPassword",
+      });
+    }
 
-        const hashedToken = crypto
-        .createHash("sha256")
-        .update(resetToken)
-        .digest("hex");
+    const resetToken = crypto.randomBytes(32).toString("hex");
 
-        user.resetPasswordToken = hashedToken ; 
-        user.resetPasswordExpires = Date.now() + 15 * 60 * 1000 ;
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
 
-        await user.save() ;
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
 
-        const resetLink = `http://localhost:5173/reset-password/${resetToken}` ;
+    await user.save();
 
-          await transporter.sendMail({
-            from: process.env.EMAIL,
-            to: user.email,
-            subject: "Password Reset",
-            html: `
+    const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL,
+      to: user.email,
+      subject: "Password Reset",
+      html: `
         <h2>Password Reset</h2>
         <p>Click below:</p>
         <a href="${resetLink}">
           Reset Password
         </a>
       `,
-          });
+    });
 
-          res.json({
-            message: "Password reset email sent",
-          });
-    }catch(error){
-         console.error(err);
-         res.status(500).json({
-           message: "Server Error",
-         });
+    res.json({
+      message: "Password reset email sent",
+    });
+  } catch (error) {
+    console.error(err);
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: {
+        $gt: Date.now(),
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "invalid or expired reset Link",
+      });
     }
-}
 
-exports.resetPassword = async (req , res) => {
-    try{
-        const { password } = req.body ;
-        const hashedToken = crypto
-        .createHash("sha256")
-        .update(req.params.token)
-        .digest("hex") ;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-        const user = await User.findOne({
-            resetPasswordToken : hashedToken ,
-            resetPasswordExpires : {
-                $gt : Date.now() ,
-            },
-        })
+    user.password = hashedPassword;
 
-        if(!user){
-            return res.status(400).json({
-                message : "invalid or expired reset Link" ,
-            })
-        }
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
 
-        const hashedPassword = await bcrypt.hash(password , 10 )
+    await user.save();
 
-        user.password = hashedPassword ; 
-        
-        user.resetPasswordToken = undefined ;
-        user.resetPasswordExpires = undefined  ;
+    res.json({
+      message: "password reset successful",
+    });
+  } catch (error) {
+    console.error("Reset password error:", err.message);
 
-        await user.save() ;
-
-        res.json({
-            message : "password reset successful" ,
-        })
-    }catch(error){
-        console.error("Reset password error:", err.message);
-
-        res.status(500).json({
-          message: "Server Error",
-          error: err.message,
-        });
-    }
-}
+    res.status(500).json({
+      message: "Server Error",
+      error: err.message,
+    });
+  }
+};
 
 exports.verifyEmail = async (req, res) => {
   try {
@@ -357,17 +359,17 @@ exports.resendVerification = async (req, res) => {
       });
     }
 
-   const token = crypto.randomBytes(32).toString("hex");
+    const token = crypto.randomBytes(32).toString("hex");
 
-   const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
-   user.verificationToken = hashedToken;
+    user.verificationToken = hashedToken;
 
-   await user.save();
+    await user.save();
 
-   const verifyLink = `http://localhost:5173/verify-email/${token}`;
+    const verifyLink = `${process.env.CLIENT_URL}/verify-email/${token}`;
 
-    // const verifyLink = `http://localhost:5173/verify-email/${verificationToken}`;
+    // const verifyLink = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
 
     await transporter.sendMail({
       from: process.env.EMAIL,
