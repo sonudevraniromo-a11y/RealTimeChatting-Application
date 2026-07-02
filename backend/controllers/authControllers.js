@@ -64,13 +64,11 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
-  console.log("1") ;
   try {
     const { name, email, password } = req.body;
     
     const existingUser = await User.findOne({ email });
     
-    console.log("2") ;
     if (existingUser) {
       return res.status(400).json({
         message: "Email already exists",
@@ -91,7 +89,6 @@ exports.register = async (req, res) => {
     
     await user.save();
     
-    console.log("3") ;
     // Send response immediately
     res.status(201).json({
       message: "Registration successful. Please verify your email.",
@@ -103,6 +100,9 @@ exports.register = async (req, res) => {
     try {
       await transporter.verify();
       console.log("SMTP Connected");
+    } catch (mailErr) {
+      console.error("verify error:",  mailErr);
+    }
 
       await transporter.sendMail({
         from: process.env.EMAIL,
@@ -117,9 +117,7 @@ exports.register = async (req, res) => {
       });
 
       console.log("Verification email sent");
-    } catch (mailErr) {
-      console.error("Mail Error:", mailErr);
-    }
+    
   } catch (err) {
      console.log(err.response?.data);
      alert(err.response?.data?.message || err.message);
