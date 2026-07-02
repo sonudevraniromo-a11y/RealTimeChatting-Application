@@ -64,51 +64,68 @@ exports.login = async (req, res) => {
 };
 
 exports.register = async (req, res) => {
+  console.log("1") ;
   try {
     const { name, email, password } = req.body;
-
+    
     const existingUser = await User.findOne({ email });
-
+    
+    console.log("2") ;
     if (existingUser) {
       return res.status(400).json({
         message: "Email already exists",
       });
     }
-
+    
     const hashedPassword = await bcrypt.hash(password, 10);
+    
     const token = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-
+    
     const user = new User({
       name,
       email,
       password: hashedPassword,
+      verificationToken: hashedToken,
     });
-
-    user.verificationToken = hashedToken;
-
+    
     await user.save();
-
-    const verifyLink = `${process.env.CLIENT_URL}/verify-email/${token}`;
-    await transporter.sendMail({
-      from: process.env.EMAIL,
-      to: user.email,
-      subject: "Verify Email",
-      html: `
-    <h2>Verify your account</h2>
-    <a href="${verifyLink}">
-      Verify Email
-    </a>
-  `,
-    });
-
-    res.json({
+    
+    console.log("3") ;
+    // Send response immediately
+    res.status(201).json({
       message: "Registration successful. Please verify your email.",
     });
+
+    // Send email in background
+    const verifyLink = `${process.env.CLIENT_URL}/verify-email/${token}`;
+
+    try {
+      await transporter.verify();
+      console.log("SMTP Connected");
+
+      await transporter.sendMail({
+        from: process.env.EMAIL,
+        to: user.email,
+        subject: "Verify Email",
+        html: `
+          <h2>Verify your account</h2>
+          <a href="${verifyLink}">
+            Verify Email
+          </a>
+        `,
+      });
+
+      console.log("Verification email sent");
+    } catch (mailErr) {
+      console.error("Mail Error:", mailErr);
+    }
   } catch (err) {
-    console.log(err);
+     console.log(err.response?.data);
+     alert(err.response?.data?.message || err.message);
+
     res.status(500).json({
-      message: "Server Error",
+      message: err.message,
     });
   }
 };
