@@ -120,8 +120,7 @@ exports.register = async (req, res) => {
     
   } catch (err) {
      console.log(err.response?.data);
-     alert(err.response?.data?.message || err.message);
-
+   
     res.status(500).json({
       message: err.message,
     });
