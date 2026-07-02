@@ -14,7 +14,7 @@ const validateRequest = require('../middlewares/validateRequest');
 
 
 
-route.post('/login' , loginLimiter , loginValidator , validateRequest , login ) ;
+route.post('/login'  , loginValidator , validateRequest , login ) ;
 route.post('/register' , registerValidator , validateRequest , register) ;
 route.post('/refresh' , refresh) ;
 route.post('/forgot-password' , forgotPasswordValidator , forgotPassword)
