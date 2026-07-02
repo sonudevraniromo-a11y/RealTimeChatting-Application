@@ -1,6 +1,7 @@
 import { useState , useEffect , useRef } from "react";
 import api from "../Services/api";
 import { Link , useNavigate } from "react-router-dom";
+import Loader from "../components/Loader";
 
 function Register(){
 
@@ -9,6 +10,7 @@ function Register(){
     const [password , setPassword ] = useState("") ;
     const [error , setError ] = useState("") ;
     const navigate = useNavigate() ;
+    const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e){
 
@@ -25,6 +27,8 @@ function Register(){
             return ; 
         }
 
+        setLoading(true);
+
         try{
 
             const response = await api.post("api/auth/register" ,{
@@ -39,12 +43,15 @@ function Register(){
         }catch(er){
             setError(er.response?.data?.message || "Registration unsuccessFull") ;
             console.log(error) ;
+        }finally{
+            setLoading(false);
         }
 
     }
 
     return (
       <>
+      {loading && <Loader text="Creating your account..." />}
         <form onSubmit={handleSubmit}>
           <div className="container mt-5">
             <div className="card p-4 mx-auto" style={{ maxWidth: "400px" }}>

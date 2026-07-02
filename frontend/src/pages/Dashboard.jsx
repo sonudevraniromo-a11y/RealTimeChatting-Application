@@ -2,12 +2,13 @@ import { useState , useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from '../Services/api'
 import { useSocket } from "../context/SocketContext";
+import Loader from "../components/Loader";
 
 function Dashboard(){
   const navigate = useNavigate() ;
   const [role , setRole] = useState('');
   const [name , setName] = useState('');
-  const [loading , setLoading ] = useState('');
+  const [loading , setLoading ] = useState(true);
   const [error , setError ] = useState('') ;
   const { socket, onlineUsers } = useSocket();
 
@@ -43,7 +44,6 @@ function Dashboard(){
       setName(response.data.user.name) ;
       setRole(response.data.user.role) ;
       
-      setLoading(false) ;
     }catch(err){
          console.error(
            "Error fetching profile:",
@@ -51,6 +51,8 @@ function Dashboard(){
          );
          setLoading(false);
          navigate("/");
+    }finally{
+      setLoading(false);
     }
   }
 
@@ -75,12 +77,9 @@ function Dashboard(){
     getProfile() ;
   },[navigate]) ;
 
-  if(loading){
-     return <div>Loading...</div>;
-  }
-
     return (
       <>
+        {loading && <Loader text="loading dashboard" />}
         <div>
           <h1>
             Dashboard this is the profile of {name} role is {role}
