@@ -281,3 +281,148 @@ exports.deleteForEveryone = async (req, res) => {
     });
   }
 };
+
+exports.reactToMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user.userId;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    const existingReaction = message.reactions.find(
+      (r) => r.user.toString() === userId.toString(),
+    );
+
+    if (!existingReaction) {
+      message.reactions.push({
+        user: userId,
+        emoji,
+      });
+    } else if (existingReaction.emoji === emoji) {
+      message.reactions = message.reactions.filter(
+        (r) => r.user.toString() !== userId.toString(),
+      );
+    } else {
+      existingReaction.emoji = emoji;
+    }
+
+    await message.save();
+
+    const io = getIO();
+
+    io.emit("message_reaction", {
+      messageId,
+      reactions: message.reactions,
+    });
+
+    return res.status(200).json({
+      reactions: message.reactions,
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.editMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { text } = req.body;
+    const userId = req.user.userId;
+
+    if (!text.trim()) {
+      return res.status(400).json({
+        message: "Message cannot be empty",
+      });
+    }
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    if (message.sender.toString() !== userId.toString()) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
+    message.text = text;
+    message.edited = true;
+
+    await message.save();
+
+    const io = getIO();
+
+    io.emit("message_edited", {
+      messageId: message._id,
+      text: message.text,
+      edited: true,
+    });
+
+    res.json({
+      message: "Edited successfully",
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.toggleStar = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.userId;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    const index = message.starredBy.findIndex(
+      (id) => id.toString() === userId.toString(),
+    );
+
+    if (index === -1) {
+      message.starredBy.push(userId);
+    } else {
+      message.starredBy.splice(index, 1);
+    }
+
+    await message.save();
+
+    getIO().emit("message_starred", {
+      messageId,
+      starredBy: message.starredBy,
+    });
+
+    res.json({
+      starredBy: message.starredBy,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
+

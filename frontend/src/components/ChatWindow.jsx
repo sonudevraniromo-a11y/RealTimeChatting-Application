@@ -81,6 +81,46 @@ function ChatWindow({ selectedConversation }) {
   }, [selectedConversation, socket]);
 
   useEffect(() => {
+    const handleReaction = ({ messageId, reactions }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId
+            ? {
+                ...m,
+                reactions,
+              }
+            : m,
+        ),
+      );
+    };
+
+    socket.on("message_reaction", handleReaction);
+
+    return () => {
+      socket.off("message_reaction", handleReaction);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    const handleStar = ({ messageId, starredBy }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId
+            ? {
+                ...m,
+                starredBy,
+              }
+            : m,
+        ),
+      );
+    };
+
+    socket.on("message_starred", handleStar);
+
+    return () => socket.off("message_starred", handleStar);
+  }, [socket]);
+
+  useEffect(() => {
     const handleMessageDeleted = ({ messageId }) => {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -126,6 +166,28 @@ return () => {
   socket.off("messages_seen", handleSeen);
 };
 }, [currentUserId , selectedConversation, socket]);
+
+useEffect(() => {
+  const handleEdited = ({ messageId, text, edited }) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m._id === messageId
+          ? {
+              ...m,
+              text,
+              edited,
+            }
+          : m,
+      ),
+    );
+  };
+
+  socket.on("message_edited", handleEdited);
+
+  return () => {
+    socket.off("message_edited", handleEdited);
+  };
+}, [socket]);
 
 useEffect(() => {
   const handleTyping = ({ senderId }) => {
