@@ -10,5 +10,4 @@ route.post("/", authMiddleware, createConversation);
 
 route.patch("/:conversationId/read", authMiddleware, markConversationRead);
 
-
 module.exports = route ;

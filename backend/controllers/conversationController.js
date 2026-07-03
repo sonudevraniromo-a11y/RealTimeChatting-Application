@@ -1,6 +1,7 @@
 const Conversation = require("../models/Conversation") ;
 const User = require("../models/userSchema") 
 
+
 exports.createConversation = async ( req , res ) => {
     try{
         const {receiverId} = req.body ;

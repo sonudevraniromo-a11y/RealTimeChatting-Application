@@ -8,6 +8,7 @@ function Message({
   openImage,
   setMessages,
   setReplyMessage,
+  messageRefs ,
 }) {
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const isMe = message.sender._id === currentUserId;
@@ -18,6 +19,7 @@ function Message({
   const [editing, setEditing] = useState(false);
   const [editedText, setEditedText] = useState(message.text);
   const isStarred = message.starredBy?.includes(currentUserId);
+  
 
   async function handleDeleteForMe() {
     try {
@@ -84,6 +86,23 @@ function Message({
     }
   }
 
+  // jumpToReply
+
+  function jumpToReply() {
+    if (!message.replyTo) return;
+
+    messageRefs.current[message.replyTo._id]?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    messageRefs.current[message.replyTo._id]?.classList.add("highlight");
+
+    setTimeout(() => {
+      messageRefs.current[message.replyTo._id]?.classList.remove("highlight");
+    }, 2000);
+  }
+
   useEffect(() => {
     function handleClickOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -132,8 +151,19 @@ function Message({
     );
   }
 
+  async function handlePin() {
+    try {
+      await api.patch(`/api/message/${message._id}/pin`);
+      setMenuOpen(false);
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+
   return (
     <div
+      ref={(el) => (messageRefs.current[message._id] = el)}
       className={`d-flex mb-2 ${
         isMe ? "justify-content-end" : "justify-content-start"
       }`}
@@ -222,6 +252,17 @@ function Message({
                 padding: "10px 15px",
                 fontSize: "14px",
               }}
+              onClick={handleStar}
+            >
+              {isStarred ? "Unstar" : "Star"}
+            </button>
+
+            <button
+              className="dropdown-item py-2"
+              style={{
+                padding: "10px 15px",
+                fontSize: "14px",
+              }}
               onClick={() => {
                 setReplyMessage(message);
                 setMenuOpen(false);
@@ -245,6 +286,17 @@ function Message({
                 Edit
               </button>
             )}
+
+            <button
+              className="dropdown-item py-2"
+              style={{
+                padding: "10px 15px",
+                fontSize: "14px",
+              }}
+              onClick={handlePin}
+            >
+              📌 Pin
+            </button>
 
             <button
               className="dropdown-item py-2"
@@ -331,7 +383,9 @@ function Message({
 
           {message.replyTo && (
             <div
+              onClick={jumpToReply}
               style={{
+                cursor: "pointer",
                 background: "rgba(0,0,0,0.06)",
                 borderLeft: "4px solid #25D366",
                 borderRadius: "8px",

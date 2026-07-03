@@ -12,7 +12,8 @@ const {
   reactToMessage ,
   editMessage ,
   toggleStar ,
-  searchMessages
+  searchMessages , 
+  pinMessage
 } = require("../controllers/messageControllers");
 
 
@@ -32,5 +33,7 @@ route.patch("/:messageId/edit", authMiddleware, editMessage);
 
 route.patch("/:messageId/star", authMiddleware , toggleStar);
 
+route.patch("/:messageId/pin", authMiddleware, pinMessage);
 
+route.get("/:conversationId/search", authMiddleware, searchMessages);
 module.exports = route;

@@ -8,21 +8,83 @@ import ImageModal from "./ImageModal";
 function ChatWindow({ selectedConversation }) {
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
-  const bottomRef = useRef(null);
   const [previewImage, setPreviewImage] = useState("");
   const { socket , onlineUsers } = useSocket();
   const [replyMessage, setReplyMessage] = useState(null);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
+  const [search, setSearch] = useState("");
+  const [matchedMessages, setMatchedMessages] = useState([]);
+  const [currentMatch, setCurrentMatch] = useState(0);
+
+  const bottomRef = useRef(null);
+  const messageRefs = useRef({});
+
 
   const currentUserId = JSON.parse(
     atob(localStorage.getItem("token").split(".")[1]),
   ).userId;
   
+
+  function handleSearch(e) {
+    const value = e.target.value;
+
+    setSearch(value);
+
+    if (!value.trim()) {
+      setMatchedMessages([]);
+      setCurrentMatch(0);
+      return;
+    }
+
+    const matches = messages.filter((m) =>
+      m.text?.toLowerCase().includes(value.toLowerCase()),
+    );
+
+    setMatchedMessages(matches);
+    setCurrentMatch(0);
+
+    if (matches.length) {
+      scrollToMessage(matches[0]._id);
+    }
+  }
+
+  function scrollToMessage(id) {
+    const el = messageRefs.current[id];
+
+    if (!el) return;
+
+    el.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    el.classList.add("highlight");
+
+    setTimeout(() => {
+      el.classList.remove("highlight");
+    }, 2000);
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key !== "Enter") return;
+
+    if (!matchedMessages.length) return;
+
+    const next = (currentMatch + 1) % matchedMessages.length;
+
+    setCurrentMatch(next);
+
+    scrollToMessage(matchedMessages[next]._id);
+  }
+
+  //scrollIntoview
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
   }, [messages]);
   
+  //loadConversation
   useEffect(() => {
     async function loadConversation() {
       if (!selectedConversation) return;
@@ -33,6 +95,7 @@ function ChatWindow({ selectedConversation }) {
         );
         
         setMessages(response.data.messages);
+        setPinnedMessage(response.data.conversation.pinnedMessage || null );
         
         await api.patch(`/api/message/seen/${selectedConversation._id}`);
       } catch (error) {
@@ -43,6 +106,7 @@ function ChatWindow({ selectedConversation }) {
     loadConversation();
   }, [selectedConversation]);
   
+  // handleRecieveMessage
   useEffect(() => {
     const handleReceiveMessage = async (message) => {
         console.log("SOCKET:", message);
@@ -80,6 +144,7 @@ function ChatWindow({ selectedConversation }) {
     };
   }, [selectedConversation, socket]);
 
+  // handleReaction
   useEffect(() => {
     const handleReaction = ({ messageId, reactions }) => {
       setMessages((prev) =>
@@ -101,6 +166,7 @@ function ChatWindow({ selectedConversation }) {
     };
   }, [socket]);
 
+  // handlestar
   useEffect(() => {
     const handleStar = ({ messageId, starredBy }) => {
       setMessages((prev) =>
@@ -120,6 +186,8 @@ function ChatWindow({ selectedConversation }) {
     return () => socket.off("message_starred", handleStar);
   }, [socket]);
 
+
+  // handleMessageDeleted
   useEffect(() => {
     const handleMessageDeleted = ({ messageId }) => {
       setMessages((prev) =>
@@ -143,7 +211,7 @@ function ChatWindow({ selectedConversation }) {
     };
   }, [socket]);
 
-  
+  //handleSeen
   useEffect(() => {
     const handleSeen = ({ conversationId }) => {
       if (
@@ -167,6 +235,7 @@ return () => {
 };
 }, [currentUserId , selectedConversation, socket]);
 
+// handleEdited
 useEffect(() => {
   const handleEdited = ({ messageId, text, edited }) => {
     setMessages((prev) =>
@@ -189,6 +258,7 @@ useEffect(() => {
   };
 }, [socket]);
 
+// handleTyping 
 useEffect(() => {
   const handleTyping = ({ senderId }) => {
     const receiver = selectedConversation?.participants.find(
@@ -212,6 +282,21 @@ useEffect(() => {
     socket.off("stop_typing", handleStopTyping);
   };
 }, [selectedConversation, socket]);
+
+//handlePinned 
+useEffect(() => {
+  const handlePinned = ({ conversationId, pinnedMessage }) => {
+    if (selectedConversation && selectedConversation._id === conversationId) {
+      setPinnedMessage(pinnedMessage);
+    }
+  };
+
+  socket.on("message_pinned", handlePinned);
+
+  return () => {
+    socket.off("message_pinned", handlePinned);
+  };
+}, [socket, selectedConversation]);
 
 if (!selectedConversation) {
   return (
@@ -258,7 +343,45 @@ if (!selectedConversation) {
             {typing ? "Typing..." : isOnline ? "Online" : "Offline"}
           </small>
         </div>
+        <div className="ms-auto" style={{ width: "250px" }}>
+          <input
+            className="form-control form-control-sm"
+            placeholder="Search..."
+            value={search}
+            onChange={handleSearch}
+            onKeyDown={handleSearchKeyDown}
+          />
+        </div>
       </div>
+
+      {pinnedMessage && (
+        <div
+          className="px-3 py-2"
+          style={{
+            background: "#FFF8D6",
+            borderBottom: "1px solid #ddd",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ fontSize: 12 }}>📌 Pinned Message</div>
+
+          <div
+            onClick={() => {
+              messageRefs.current[pinnedMessage._id]?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+            }}
+            style={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {pinnedMessage.image ? "📷 Photo" : pinnedMessage.text}
+          </div>
+        </div>
+      )}
 
       <div
         className="flex-grow-1 px-4 py-3"
@@ -272,6 +395,7 @@ if (!selectedConversation) {
             openImage={setPreviewImage}
             setMessages={setMessages}
             setReplyMessage={setReplyMessage}
+            messageRefs={messageRefs}
           />
         ))}
         <div ref={bottomRef}></div>

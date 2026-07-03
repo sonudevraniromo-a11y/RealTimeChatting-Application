@@ -28,7 +28,7 @@ exports.sendMessage = async (req, res) => {
       return res.status(404).json({
         message: "Conversation not found",
       });
-    }
+    } 
 
     const message = new Message({
       conversation: convo._id,
@@ -108,6 +108,14 @@ exports.getMessages = async (req, res) => {
       });
     }
 
+   await convo.populate({
+     path: "pinnedMessage",
+     populate: {
+       path: "sender",
+       select: "name avatar",
+     },
+   }); 
+
     const messages = await Message.find({
       conversation: conversationId,
       deletedFor: {
@@ -125,6 +133,7 @@ exports.getMessages = async (req, res) => {
 
     return res.status(200).json({
       messages,
+      conversation : convo ,
     });
   } catch (error) {
     console.error(error);
@@ -426,3 +435,81 @@ exports.toggleStar = async (req, res) => {
   }
 };
 
+exports.pinMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    const conversation = await Conversation.findById(message.conversation);
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Conversation not found",
+      });
+    }
+
+    if (
+      conversation.pinnedMessage &&
+      conversation.pinnedMessage.toString() === messageId
+    ) {
+      conversation.pinnedMessage = null;
+    } else {
+      conversation.pinnedMessage = messageId;
+    }
+
+    await conversation.save();
+
+    await conversation.populate({
+      path: "pinnedMessage",
+      populate: {
+        path: "sender",
+        select: "name",
+      },
+    });
+
+    getIO().emit("message_pinned", {
+      conversationId: conversation._id,
+      pinnedMessage: conversation.pinnedMessage,
+    });
+
+    res.json({
+      pinnedMessage: conversation.pinnedMessage,
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
+
+exports.searchMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { q } = req.query;
+
+    const messages = await Message.find({
+      conversation: conversationId,
+      text: {
+        $regex: q,
+        $options: "i",
+      },
+    }).populate("sender", "name");
+
+    res.json(messages);
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+};
