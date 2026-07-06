@@ -53,6 +53,11 @@ exports.login = async (req, res) => {
     res.json({
       message: "Login successful",
       accessToken,
+      user: {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (err) {
     console.error("Login error:", err.message);
@@ -66,29 +71,29 @@ exports.login = async (req, res) => {
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
+
     const existingUser = await User.findOne({ email });
-    
+
     if (existingUser) {
       return res.status(400).json({
         message: "Email already exists",
       });
     }
-    
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
     const token = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-    
+
     const user = new User({
       name,
       email,
       password: hashedPassword,
       verificationToken: hashedToken,
     });
-    
+
     await user.save();
-    
+
     // Send response immediately
     res.status(201).json({
       message: "Registration successful. Please verify your email.",
@@ -101,26 +106,25 @@ exports.register = async (req, res) => {
       await transporter.verify();
       console.log("SMTP Connected");
     } catch (mailErr) {
-      console.error("verify error:",  mailErr);
+      console.error("verify error:", mailErr);
     }
 
-      await transporter.sendMail({
-        from: process.env.EMAIL,
-        to: user.email,
-        subject: "Verify Email",
-        html: `
+    await transporter.sendMail({
+      from: process.env.EMAIL,
+      to: user.email,
+      subject: "Verify Email",
+      html: `
           <h2>Verify your account</h2>
           <a href="${verifyLink}">
             Verify Email
           </a>
         `,
-      });
+    });
 
-      console.log("Verification email sent");
-    
+    console.log("Verification email sent");
   } catch (err) {
-     console.log(err.response?.data);
-   
+    console.error(err);
+
     res.status(500).json({
       message: err.message,
     });
@@ -177,11 +181,14 @@ exports.profile = async (req, res) => {
     }
 
     res.json({
-      message: "wellcome",
+      message: "welcome",
       user: {
+        userId: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
+        preferences: user.preferences,
+        privacy: user.privacy,
       },
     });
   } catch (err) {
@@ -311,11 +318,11 @@ exports.resetPassword = async (req, res) => {
       message: "password reset successful",
     });
   } catch (error) {
-    console.error("Reset password error:", err.message);
+    console.error("Reset password error:", error.message);
 
     res.status(500).json({
       message: "Server Error",
-      error: err.message,
+      error: error.message,
     });
   }
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import "./Message.css";
+import "../styles/chat.css";
 import api from "../Services/api";
 
 function Message({
@@ -8,10 +8,11 @@ function Message({
   openImage,
   setMessages,
   setReplyMessage,
-  messageRefs ,
+  messageRefs,
 }) {
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const isMe = message.sender._id === currentUserId;
+  const side = isMe ? "me" : "them";
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const [hover, setHover] = useState(false);
@@ -19,7 +20,6 @@ function Message({
   const [editing, setEditing] = useState(false);
   const [editedText, setEditedText] = useState(message.text);
   const isStarred = message.starredBy?.includes(currentUserId);
-  
 
   async function handleDeleteForMe() {
     try {
@@ -119,28 +119,10 @@ function Message({
 
   if (message.deletedForEveryone) {
     return (
-      <div
-        className={`d-flex mb-2 ${
-          isMe ? "justify-content-end" : "justify-content-start"
-        }`}
-      >
-        <div
-          style={{
-            maxWidth: "65%",
-            background: isMe ? "#DCF8C6" : "#FFFFFF",
-            borderRadius: "16px",
-            padding: "10px 14px",
-            fontStyle: "italic",
-            color: "#777",
-          }}
-        >
+      <div className={`chat-app message-row ${side}`}>
+        <div className={`bubble-deleted ${isMe ? "sent" : "received"}`}>
           🚫 This message was deleted
-          <div
-            className="d-flex justify-content-end mt-1"
-            style={{
-              fontSize: "11px",
-            }}
-          >
+          <div className="message-meta">
             {new Date(message.createdAt).toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
@@ -160,45 +142,27 @@ function Message({
     }
   }
 
+  async function handleCopy() {
+    await navigator.clipboard.writeText(message.text);
+    setMenuOpen(false);
+  }
 
   return (
     <div
       ref={(el) => (messageRefs.current[message._id] = el)}
-      className={`d-flex mb-2 ${
-        isMe ? "justify-content-end" : "justify-content-start"
-      }`}
+      className={`chat-app message-row ${side}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => {
         if (!menuOpen && !showReactionPicker) setHover(false);
       }}
     >
-      <div
-        ref={menuRef}
-        className="message-wrapper"
-        style={{
-          position: "relative",
-          maxWidth: "65%",
-        }}
-      >
+      <div ref={menuRef} className="message-wrapper">
         {(hover || showReactionPicker) && (
           <button
-            className="btn btn-light btn-sm"
+            className={`msg-hover-btn react ${side}`}
             onClick={(e) => {
               e.stopPropagation();
               setShowReactionPicker((prev) => !prev);
-            }}
-            style={{
-              position: "absolute",
-              top: "50%",
-              transform: "translateY(-50%)",
-              ...(isMe
-                ? { right: "calc(100% + 42px)" }
-                : { left: "calc(100% + 42px)" }),
-              width: "30px",
-              height: "30px",
-              padding: 0,
-              borderRadius: "50%",
-              zIndex: 20,
             }}
           >
             ❤️
@@ -206,23 +170,10 @@ function Message({
         )}
         {(hover || menuOpen) && (
           <button
-            className="btn btn-light btn-sm"
+            className={`msg-hover-btn menu ${side}`}
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen((prev) => !prev);
-            }}
-            style={{
-              position: "absolute",
-              top: "50%",
-              transform: "translateY(-50%)",
-              ...(isMe
-                ? { right: "calc(100% + 6px)" }
-                : { left: "calc(100% + 6px)" }),
-              width: "30px",
-              height: "30px",
-              padding: 0,
-              borderRadius: "50%",
-              zIndex: 20,
             }}
           >
             <i className="bi bi-three-dots-vertical"></i>
@@ -230,39 +181,17 @@ function Message({
         )}
 
         {menuOpen && (
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              transform: "translateY(-50%)",
-              ...(isMe
-                ? { right: "calc(100% + 10px)" }
-                : { left: "calc(100% + 10px)" }),
-              width: "180px",
-              background: "white",
-              borderRadius: "12px",
-              boxShadow: "0 8px 24px rgba(0,0,0,.18)",
-              overflow: "hidden",
-              zIndex: 30,
-            }}
-          >
-            <button
-              className="dropdown-item py-2"
-              style={{
-                padding: "10px 15px",
-                fontSize: "14px",
-              }}
-              onClick={handleStar}
-            >
+          <div className={`msg-menu ${side}`}>
+            <button className="msg-menu-item" onClick={handleStar}>
               {isStarred ? "Unstar" : "Star"}
             </button>
 
+            <button className="msg-menu-item" onClick={handleCopy}>
+              📋 Copy
+            </button>
+
             <button
-              className="dropdown-item py-2"
-              style={{
-                padding: "10px 15px",
-                fontSize: "14px",
-              }}
+              className="msg-menu-item"
               onClick={() => {
                 setReplyMessage(message);
                 setMenuOpen(false);
@@ -273,11 +202,7 @@ function Message({
 
             {isMe && !message.deletedForEveryone && (
               <button
-                className="dropdown-item py-2"
-                style={{
-                  padding: "10px 15px",
-                  fontSize: "14px",
-                }}
+                className="msg-menu-item"
                 onClick={() => {
                   setEditing(true);
                   setMenuOpen(false);
@@ -287,35 +212,17 @@ function Message({
               </button>
             )}
 
-            <button
-              className="dropdown-item py-2"
-              style={{
-                padding: "10px 15px",
-                fontSize: "14px",
-              }}
-              onClick={handlePin}
-            >
+            <button className="msg-menu-item" onClick={handlePin}>
               📌 Pin
             </button>
 
-            <button
-              className="dropdown-item py-2"
-              style={{
-                padding: "10px 15px",
-                fontSize: "14px",
-              }}
-              onClick={handleDeleteForMe}
-            >
+            <button className="msg-menu-item" onClick={handleDeleteForMe}>
               Delete for me
             </button>
 
             {isMe && (
               <button
-                className="dropdown-item text-danger py-2"
-                style={{
-                  padding: "10px 15px",
-                  fontSize: "14px",
-                }}
+                className="msg-menu-item danger"
                 onClick={handleDeleteForEveryone}
               >
                 Delete for everyone
@@ -326,18 +233,7 @@ function Message({
 
         {showReactionPicker && (
           <div
-            style={{
-              position: "absolute",
-              top: "-45px",
-              background: "#fff",
-              borderRadius: "30px",
-              display: "flex",
-              padding: "6px",
-              gap: "4px",
-              boxShadow: "0 4px 12px rgba(0,0,0,.2)",
-              zIndex: 100,
-              ...(isMe ? { right: 0 } : { left: 0 }),
-            }}
+            className={`reaction-picker ${side}`}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => {
               setShowReactionPicker(false);
@@ -347,7 +243,6 @@ function Message({
             {emojis.map((emoji) => (
               <button
                 key={emoji}
-                className="btn btn-light btn-sm"
                 onClick={() => {
                   handleReaction(emoji);
                   setShowReactionPicker(false);
@@ -359,59 +254,16 @@ function Message({
           </div>
         )}
 
-        <div
-          style={{
-            background: isMe ? "#DCF8C6" : "#FFFFFF",
-            borderRadius: "16px",
-            padding: "8px 12px",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
-            wordBreak: "break-word",
-          }}
-        >
-          {!isMe && (
-            <div
-              style={{
-                fontWeight: 600,
-                fontSize: "13px",
-                color: "#0D6EFD",
-                marginBottom: "4px",
-              }}
-            >
-              {message.sender.name}
-            </div>
-          )}
+        <div className={`bubble ${isMe ? "sent" : "received"}`}>
+          {!isMe && <div className="sender-name">{message.sender.name}</div>}
 
           {message.replyTo && (
-            <div
-              onClick={jumpToReply}
-              style={{
-                cursor: "pointer",
-                background: "rgba(0,0,0,0.06)",
-                borderLeft: "4px solid #25D366",
-                borderRadius: "8px",
-                padding: "6px 10px",
-                marginBottom: "8px",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: "600",
-                  fontSize: "13px",
-                  color: "#25D366",
-                }}
-              >
+            <div className="reply-preview" onClick={jumpToReply}>
+              <div className="reply-preview-name">
                 {message.replyTo.sender?.name || "Unknown"}
               </div>
 
-              <div
-                style={{
-                  fontSize: "13px",
-                  color: "#555",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
+              <div className="reply-preview-text">
                 {message.replyTo.image
                   ? "📷 Photo"
                   : message.replyTo.text || "Deleted message"}
@@ -421,37 +273,32 @@ function Message({
 
           {message.image && (
             <img
+              className="message-image"
               src={`${import.meta.env.VITE_API_URL}${message.image}`}
               alt=""
               onClick={(e) => {
                 e.stopPropagation();
                 openImage(`${import.meta.env.VITE_API_URL}${message.image}`);
               }}
-              style={{
-                width: "100%",
-                maxWidth: "260px",
-                borderRadius: "10px",
-                cursor: "pointer",
-                marginBottom: message.text ? "8px" : 0,
-              }}
+              style={{ marginBottom: message.text ? "8px" : 0 }}
             />
           )}
 
           {editing ? (
             <div>
               <textarea
-                className="form-control"
+                className="edit-textarea"
                 value={editedText}
                 onChange={(e) => setEditedText(e.target.value)}
               />
 
-              <div className="mt-2 d-flex gap-2">
-                <button className="btn btn-success btn-sm" onClick={handleEdit}>
+              <div className="edit-actions">
+                <button className="btn-save" onClick={handleEdit}>
                   Save
                 </button>
 
                 <button
-                  className="btn btn-secondary btn-sm"
+                  className="btn-cancel"
                   onClick={() => {
                     setEditing(false);
                     setEditedText(message.text);
@@ -462,16 +309,7 @@ function Message({
               </div>
             </div>
           ) : (
-            message.text && (
-              <div
-                style={{
-                  fontSize: "15px",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {message.text}
-              </div>
-            )
+            message.text && <div className="message-text">{message.text}</div>
           )}
 
           {message.reactions?.length > 0 &&
@@ -483,28 +321,9 @@ function Message({
               });
 
               return (
-                <div
-                  style={{
-                    marginTop: "6px",
-                    display: "flex",
-                    gap: "6px",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div className="reactions-row">
                   {Object.entries(grouped).map(([emoji, count]) => (
-                    <div
-                      key={emoji}
-                      style={{
-                        background: "#fff",
-                        borderRadius: "20px",
-                        padding: "2px 8px",
-                        fontSize: "14px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-                      }}
-                    >
+                    <div key={emoji} className="reaction-pill">
                       <span>{emoji}</span>
                       {count > 1 && <span>{count}</span>}
                     </div>
@@ -513,50 +332,20 @@ function Message({
               );
             })()}
 
-          <div
-            className="d-flex justify-content-end align-items-center mt-1"
-            style={{
-              fontSize: "11px",
-              color: "#666",
-              gap: "4px",
-            }}
-          >
+          <div className="message-meta">
             <span>
               {new Date(message.createdAt).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
 
-              {message.edited && (
-                <span
-                  style={{
-                    marginLeft: "4px",
-                    fontStyle: "italic",
-                  }}
-                >
-                  (edited)
-                </span>
-              )}
+              {message.edited && <span className="edited-tag">(edited)</span>}
             </span>
 
-            {isStarred && (
-              <span
-                style={{
-                  color: "#f4b400",
-                  marginRight: "4px",
-                }}
-              >
-                ⭐
-              </span>
-            )}
+            {isStarred && <span className="starred-icon">⭐</span>}
 
             {isMe && (
-              <span
-                style={{
-                  color: message.seen ? "#34B7F1" : "#777",
-                  fontSize: "13px",
-                }}
-              >
+              <span className={`seen-tick ${message.seen ? "seen" : "unseen"}`}>
                 {message.seen ? "✓✓" : "✓"}
               </span>
             )}

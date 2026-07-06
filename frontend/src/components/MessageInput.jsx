@@ -1,7 +1,18 @@
 import EmojiPicker from "emoji-picker-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  FileInput,
+  Gift,
+  ImagePlus,
+  Mic,
+  Send,
+  Smile,
+  Sticker,
+} from "lucide-react";
 import api from "../Services/api";
 import { useSocket } from "../context/SocketContext";
+import "../styles/chat.css";
 
 function MessageInput({
   conversationId,
@@ -12,6 +23,7 @@ function MessageInput({
 }) {
   const [text, setText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const emojiRef = useRef(null);
   const { socket } = useSocket();
   const typingTimeout = useRef(null);
@@ -42,7 +54,6 @@ function MessageInput({
         textareaRef.current.style.height = "44px";
         textareaRef.current.style.height =
           textareaRef.current.scrollHeight + "px";
-
         textareaRef.current.focus();
       }, 0);
 
@@ -56,7 +67,6 @@ function MessageInput({
     const value = e.target.value;
     setText(value);
 
-    // Auto-grow textarea
     textareaRef.current.style.height = "44px";
     textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
 
@@ -67,7 +77,6 @@ function MessageInput({
     });
 
     clearTimeout(typingTimeout.current);
-
     typingTimeout.current = setTimeout(() => {
       socket.emit("stop_typing", {
         receiverId,
@@ -77,14 +86,19 @@ function MessageInput({
 
   function handleImageChange(e) {
     const file = e.target.files[0];
-
     if (!file) return;
-
     setImage(file);
     setPreview(URL.createObjectURL(file));
+    textareaRef.current?.focus();
+  }
 
-    if (textareaRef.current) {
-      textareaRef.current.focus();
+  function handleDrop(e) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
     }
   }
 
@@ -93,33 +107,17 @@ function MessageInput({
 
     try {
       const formData = new FormData();
-
       formData.append("conversationId", conversationId);
       formData.append("text", text);
-
-      if (replyMessage) {
-        formData.append("replyTo", replyMessage._id);
-      }
-
-      if (image) {
-        formData.append("image", image);
-      }
-
+      if (replyMessage) formData.append("replyTo", replyMessage._id);
+      if (image) formData.append("image", image);
 
       await api.post("/api/message", formData);
-
       setText("");
       setImage(null);
       setPreview("");
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-
-      socket.emit("stop_typing", {
-        receiverId,
-      });
-
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      socket.emit("stop_typing", { receiverId });
       textareaRef.current.style.height = "44px";
     } catch (error) {
       console.log(error);
@@ -134,85 +132,69 @@ function MessageInput({
   }
 
   return (
-    <>
+    <div className="chat-app message-input-shell">
       {preview && (
-        <div
-          className="p-2"
-          style={{
-            background: "#F0F2F5",
-            borderTop: "1px solid #ddd",
-          }}
-        >
-          <img
-            src={preview}
-            alt=""
-            style={{
-              width: "150px",
-              borderRadius: "10px",
-            }}
-          />
-
+        <div className="input-preview-bar">
+          <img className="input-preview-img" src={preview} alt="Preview" />
           <button
-            className="btn btn-danger btn-sm ms-3"
+            className="btn-remove-image"
+            type="button"
             onClick={() => {
               setImage(null);
               setPreview("");
-
-              if (fileInputRef.current) {
-                fileInputRef.current.value = "";
-              }
+              if (fileInputRef.current) fileInputRef.current.value = "";
             }}
           >
             Remove
           </button>
         </div>
       )}
-      <div
-        className="d-flex align-items-end px-3 py-2"
-        style={{
-          background: "#F0F2F5",
-          borderTop: "1px solid #ddd",
-          gap: "10px",
-        }}
-      >
-        {/* Emoji */}
-        <div
-          style={{
-            position: "relative",
-          }}
-          ref={emojiRef}
-        >
-          <button
-            className="btn btn-light rounded-circle"
-            style={{
-              width: "42px",
-              height: "42px",
-            }}
-            onClick={() => setShowEmojiPicker((prev) => !prev)}
-          >
-            <i className="bi bi-emoji-smile"></i>
-          </button>
 
+      <div
+        className={`message-input-bar ${isDragging ? "drag-active" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        <div className="input-icon-group" ref={emojiRef}>
           <button
-            className="btn btn-light rounded-circle"
-            onClick={() => fileInputRef.current.click()}
-            style={{
-              width: "42px",
-              height: "42px",
-            }}
+            type="button"
+            className="icon-btn"
+            onClick={() => setShowEmojiPicker((prev) => !prev)}
+            aria-label="Open emoji picker"
           >
-            <i className="bi bi-image"></i>
+            <Smile size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setShowEmojiPicker(false)}
+            aria-label="Insert GIF"
+          >
+            <Gift size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => fileInputRef.current.click()}
+            aria-label="Attach media"
+          >
+            <ImagePlus size={18} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => fileInputRef.current.click()}
+            aria-label="Attach file"
+          >
+            <FileInput size={18} />
           </button>
 
           {showEmojiPicker && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "55px",
-                left: 0,
-                zIndex: 1000,
-              }}
-            >
+            <div className="emoji-picker-popup">
               <EmojiPicker onEmojiClick={handleEmojiClick} />
             </div>
           )}
@@ -225,84 +207,73 @@ function MessageInput({
           hidden
           onChange={handleImageChange}
         />
-        <>
-          {replyMessage && (
-            <div
-              className="mb-2 p-2"
-              style={{
-                background: "#fff",
-                borderLeft: "4px solid #25D366",
-                borderRadius: "8px",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: 13,
-                }}
-              >
-                {replyMessage.sender.name}
-              </div>
 
-              <div
-                style={{
-                  fontSize: 14,
-                  color: "#666",
-                }}
-              >
+        <div className="textarea-column">
+          {replyMessage && (
+            <div className="reply-bar">
+              <div className="reply-bar-name">{replyMessage.sender.name}</div>
+              <div className="reply-bar-text">
                 {replyMessage.text || "📷 Photo"}
               </div>
-
               <button
-                className="btn-close btn-sm float-end"
+                type="button"
+                className="reply-bar-close"
                 onClick={() => setReplyMessage(null)}
-              />
+                aria-label="Cancel reply"
+              >
+                ✕
+              </button>
             </div>
           )}
-        </>
 
-        {/* Text Area */}
-        <textarea
-          ref={textareaRef}
-          className="form-control"
-          rows={1}
-          placeholder="Type a message"
-          value={text}
-          onChange={handleTyping}
-          onKeyDown={handleKeyDown}
-          style={{
-            resize: "none",
-            border: "none",
-            borderRadius: "22px",
-            padding: "10px 16px",
-            fontSize: "15px",
-            minHeight: "44px",
-            maxHeight: "120px",
-            overflowY: "auto",
-            boxShadow: "none",
-          }}
-        />
+          <textarea
+            ref={textareaRef}
+            className="message-textarea"
+            rows={1}
+            placeholder="Type a message"
+            value={text}
+            onChange={handleTyping}
+            onKeyDown={handleKeyDown}
+          />
 
-        {/* Send */}
+          <div className="input-footer-row">
+            <span className="character-counter">{text.length}/1200</span>
+            <div className="input-meta-actions">
+              <button
+                type="button"
+                className="icon-btn small"
+                aria-label="Camera"
+              >
+                <Camera size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn small"
+                aria-label="Record voice"
+              >
+                <Mic size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn small"
+                aria-label="Stickers"
+              >
+                <Sticker size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
         <button
-          className="btn btn-success rounded-circle d-flex justify-content-center align-items-center"
+          className="send-btn"
+          type="button"
           onClick={handleSend}
-          style={{
-            width: "44px",
-            height: "44px",
-            flexShrink: 0,
-          }}
+          aria-label="Send message"
         >
-          <i
-            className="bi bi-send-fill"
-            style={{
-              fontSize: "18px",
-              color: "white",
-            }}
-          ></i>
+          <Send size={20} />
         </button>
       </div>
-    </>
+    </div>
   );
 }
 

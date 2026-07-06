@@ -1,29 +1,34 @@
-import { useEffect, useState , useRef} from "react";
+import { useEffect, useState, useRef } from "react";
 import api from "../Services/api";
-import Message from "./Message";
-import MessageInput from "./MessageInput";
 import { useSocket } from "../context/SocketContext";
+import ChatHeader from "./ChatHeader";
+import MessageList from "./MessageList";
+import MessageInput from "./MessageInput";
 import ImageModal from "./ImageModal";
+import ChatDetailsPanel from "./ChatDetailsPanel";
+import { getCurrentUserId } from "../utils/auth";
+import "../styles/chat.css";
 
-function ChatWindow({ selectedConversation }) {
+function ChatWindow({ selectedConversation, setSelectedConversation }) {
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [previewImage, setPreviewImage] = useState("");
-  const { socket , onlineUsers } = useSocket();
+  const { socket, onlineUsers } = useSocket();
   const [replyMessage, setReplyMessage] = useState(null);
   const [pinnedMessage, setPinnedMessage] = useState(null);
   const [search, setSearch] = useState("");
   const [matchedMessages, setMatchedMessages] = useState([]);
   const [currentMatch, setCurrentMatch] = useState(0);
+  const [showDetails, setShowDetails] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [floatingDate, setFloatingDate] = useState("");
 
   const bottomRef = useRef(null);
+  const firstLoad = useRef(true);
   const messageRefs = useRef({});
+  const messagesAreaRef = useRef(null);
 
-
-  const currentUserId = JSON.parse(
-    atob(localStorage.getItem("token").split(".")[1]),
-  ).userId;
-  
+  const currentUserId = getCurrentUserId();
 
   function handleSearch(e) {
     const value = e.target.value;
@@ -67,84 +72,89 @@ function ChatWindow({ selectedConversation }) {
 
   function handleSearchKeyDown(e) {
     if (e.key !== "Enter") return;
-
     if (!matchedMessages.length) return;
 
     const next = (currentMatch + 1) % matchedMessages.length;
-
     setCurrentMatch(next);
-
     scrollToMessage(matchedMessages[next]._id);
   }
 
-  //scrollIntoview
+  function showStatus(message) {
+    setStatusMessage(message);
+    setTimeout(() => {
+      setStatusMessage("");
+    }, 3000);
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    if (firstLoad.current) {
+      bottomRef.current?.scrollIntoView();
+      firstLoad.current = false;
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
-  
-  //loadConversation
+
   useEffect(() => {
+    firstLoad.current = true;
     async function loadConversation() {
       if (!selectedConversation) return;
-      
+
       try {
         const response = await api.get(
           `/api/message/${selectedConversation._id}`,
         );
-        
+
         setMessages(response.data.messages);
-        setPinnedMessage(response.data.conversation.pinnedMessage || null );
-        
+        setPinnedMessage(response.data.conversation.pinnedMessage || null);
+        setFloatingDate(
+          response.data.messages.length
+            ? new Date(
+                response.data.messages[response.data.messages.length - 1]
+                  .createdAt,
+              ).toLocaleDateString([], {
+                weekday: "long",
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })
+            : "",
+        );
         await api.patch(`/api/message/seen/${selectedConversation._id}`);
       } catch (error) {
         console.log(error);
       }
     }
-    
+
     loadConversation();
   }, [selectedConversation]);
-  
-  // handleRecieveMessage
+
   useEffect(() => {
     const handleReceiveMessage = async (message) => {
-        console.log("SOCKET:", message);
       if (
         selectedConversation &&
         message.conversation.toString() === selectedConversation._id.toString()
       ) {
-        
-       setMessages((prev) => {
-         if (prev.some((m) => m._id === message._id)) {
-           return prev;
-         }
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === message._id)) return prev;
+          return [...prev, message];
+        });
 
-         return [...prev, message];
-       });
-        
         try {
-          await api.patch(
-            `/api/message/seen/${selectedConversation._id}`
-          );
-          
-          await api.patch(
-            `/api/conversation/${selectedConversation._id}/read`
-          );
+          await api.patch(`/api/message/seen/${selectedConversation._id}`);
+          await api.patch(`/api/conversation/${selectedConversation._id}/read`);
         } catch (error) {
           console.log(error);
         }
       }
     };
-    
+
     socket.on("receive_message", handleReceiveMessage);
-    
     return () => {
       socket.off("receive_message", handleReceiveMessage);
     };
   }, [selectedConversation, socket]);
 
-  // handleReaction
   useEffect(() => {
     const handleReaction = ({ messageId, reactions }) => {
       setMessages((prev) =>
@@ -160,13 +170,11 @@ function ChatWindow({ selectedConversation }) {
     };
 
     socket.on("message_reaction", handleReaction);
-
     return () => {
       socket.off("message_reaction", handleReaction);
     };
   }, [socket]);
 
-  // handlestar
   useEffect(() => {
     const handleStar = ({ messageId, starredBy }) => {
       setMessages((prev) =>
@@ -182,12 +190,9 @@ function ChatWindow({ selectedConversation }) {
     };
 
     socket.on("message_starred", handleStar);
-
     return () => socket.off("message_starred", handleStar);
   }, [socket]);
 
-
-  // handleMessageDeleted
   useEffect(() => {
     const handleMessageDeleted = ({ messageId }) => {
       setMessages((prev) =>
@@ -205,13 +210,11 @@ function ChatWindow({ selectedConversation }) {
     };
 
     socket.on("message_deleted", handleMessageDeleted);
-
     return () => {
       socket.off("message_deleted", handleMessageDeleted);
     };
   }, [socket]);
 
-  //handleSeen
   useEffect(() => {
     const handleSeen = ({ conversationId }) => {
       if (
@@ -220,194 +223,205 @@ function ChatWindow({ selectedConversation }) {
       ) {
         return;
       }
-      
+
       setMessages((prev) =>
         prev.map((msg) =>
           msg.sender._id === currentUserId ? { ...msg, seen: true } : msg,
-    ),
-  );
-};
+        ),
+      );
+    };
 
-socket.on("messages_seen", handleSeen);
+    socket.on("messages_seen", handleSeen);
+    return () => {
+      socket.off("messages_seen", handleSeen);
+    };
+  }, [currentUserId, selectedConversation, socket]);
 
-return () => {
-  socket.off("messages_seen", handleSeen);
-};
-}, [currentUserId , selectedConversation, socket]);
+  useEffect(() => {
+    const handleEdited = ({ messageId, text, edited }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId
+            ? {
+                ...m,
+                text,
+                edited,
+              }
+            : m,
+        ),
+      );
+    };
 
-// handleEdited
-useEffect(() => {
-  const handleEdited = ({ messageId, text, edited }) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m._id === messageId
-          ? {
-              ...m,
-              text,
-              edited,
-            }
-          : m,
-      ),
-    );
-  };
+    socket.on("message_edited", handleEdited);
+    return () => {
+      socket.off("message_edited", handleEdited);
+    };
+  }, [socket]);
 
-  socket.on("message_edited", handleEdited);
+  useEffect(() => {
+    const handleTyping = ({ senderId }) => {
+      const receiver = selectedConversation?.participants.find(
+        (p) => p._id !== currentUserId,
+      );
 
-  return () => {
-    socket.off("message_edited", handleEdited);
-  };
-}, [socket]);
+      if (receiver && receiver._id === senderId) {
+        setTyping(true);
+      }
+    };
 
-// handleTyping 
-useEffect(() => {
-  const handleTyping = ({ senderId }) => {
-    const receiver = selectedConversation?.participants.find(
-      (p) => p._id !== currentUserId,
-    );
-    
-    if (receiver && receiver._id === senderId) {
-      setTyping(true);
+    const handleStopTyping = () => {
+      setTyping(false);
+    };
+
+    socket.on("typing", handleTyping);
+    socket.on("stop_typing", handleStopTyping);
+
+    return () => {
+      socket.off("typing", handleTyping);
+      socket.off("stop_typing", handleStopTyping);
+    };
+  }, [selectedConversation, socket]);
+
+  useEffect(() => {
+    const handlePinned = ({ conversationId, pinnedMessage }) => {
+      if (selectedConversation && selectedConversation._id === conversationId) {
+        setPinnedMessage(pinnedMessage);
+      }
+    };
+
+    socket.on("message_pinned", handlePinned);
+    return () => {
+      socket.off("message_pinned", handlePinned);
+    };
+  }, [socket, selectedConversation]);
+
+  async function toggleConversationArchive() {
+    if (!selectedConversation) return;
+
+    try {
+      const response = await api.patch(
+        `/api/conversation/${selectedConversation._id}/archive`,
+      );
+
+      setSelectedConversation((prev) => ({
+        ...prev,
+        archivedBy: response.data.conversation.archivedBy,
+      }));
+    } catch (error) {
+      console.error(error);
     }
-  };
-  
-  const handleStopTyping = () => {
-    setTyping(false);
-  };
-  
-  socket.on("typing", handleTyping);
-  socket.on("stop_typing", handleStopTyping);
-  
-  return () => {
-    socket.off("typing", handleTyping);
-    socket.off("stop_typing", handleStopTyping);
-  };
-}, [selectedConversation, socket]);
+  }
 
-//handlePinned 
-useEffect(() => {
-  const handlePinned = ({ conversationId, pinnedMessage }) => {
-    if (selectedConversation && selectedConversation._id === conversationId) {
-      setPinnedMessage(pinnedMessage);
-    }
-  };
-
-  socket.on("message_pinned", handlePinned);
-
-  return () => {
-    socket.off("message_pinned", handlePinned);
-  };
-}, [socket, selectedConversation]);
-
-if (!selectedConversation) {
-  return (
-    <div className="flex-grow-1 d-flex justify-content-center align-items-center">
-        Select a conversation
+  if (!selectedConversation) {
+    return (
+      <div className="chat-app chat-window-empty">
+        <div className="empty-state-card">
+          <h2>Pick a conversation</h2>
+          <p>
+            Your polished chat workspace is waiting. Select a chat to start
+            messaging.
+          </p>
+        </div>
       </div>
     );
   }
-  
+
   const receiver = selectedConversation.participants.find(
     (p) => p._id !== currentUserId,
   );
-
   const isOnline = onlineUsers.includes(receiver._id);
 
   return (
-    <div className="flex-grow-1 d-flex flex-column">
-      <div
-        className="d-flex align-items-center px-3"
-        style={{
-          height: "70px",
-          background: "#F0F2F5",
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-        <img
-          src={
-            receiver.avatar ||
-            `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${receiver.name}`
-          }
-          alt=""
-          style={{
-            width: 45,
-            height: 45,
-            borderRadius: "50%",
-            marginRight: 12,
-          }}
+    <div className="chat-app chat-window-layout">
+      <div className="chat-window">
+        <ChatHeader
+          receiver={receiver}
+          typing={typing}
+          isOnline={isOnline}
+          onToggleDetails={() => setShowDetails((prev) => !prev)}
+          onSearchClick={() => document.getElementById("chat-search")?.focus()}
+          onAudioCall={() => showStatus("Voice call coming soon.")}
+          onVideoCall={() => showStatus("Video call coming soon.")}
         />
 
-        <div>
-          <div style={{ fontWeight: 600 }}>{receiver.name}</div>
+        {statusMessage && (
+          <div className="chat-status-notice">{statusMessage}</div>
+        )}
 
-          <small style={{ color: "#666" }}>
-            {typing ? "Typing..." : isOnline ? "Online" : "Offline"}
-          </small>
-        </div>
-        <div className="ms-auto" style={{ width: "250px" }}>
+        <div className="chat-search-bar">
           <input
-            className="form-control form-control-sm"
-            placeholder="Search..."
+            id="chat-search"
+            className="form-control"
+            placeholder="Search messages in this chat"
             value={search}
             onChange={handleSearch}
             onKeyDown={handleSearchKeyDown}
           />
+          <small className="text-muted">
+            Press Enter to move through matches ({matchedMessages.length})
+          </small>
         </div>
-      </div>
 
-      {pinnedMessage && (
-        <div
-          className="px-3 py-2"
-          style={{
-            background: "#FFF8D6",
-            borderBottom: "1px solid #ddd",
-            cursor: "pointer",
-          }}
-        >
-          <div style={{ fontSize: 12 }}>📌 Pinned Message</div>
-
-          <div
-            onClick={() => {
-              messageRefs.current[pinnedMessage._id]?.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-              });
-            }}
-            style={{
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {pinnedMessage.image ? "📷 Photo" : pinnedMessage.text}
+        {pinnedMessage && (
+          <div className="pinned-banner">
+            <div className="pinned-label">Pinned</div>
+            <button
+              type="button"
+              className="pinned-text"
+              onClick={() => {
+                messageRefs.current[pinnedMessage._id]?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              }}
+            >
+              {pinnedMessage.image ? "📷 Photo" : pinnedMessage.text}
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <div
-        className="flex-grow-1 px-4 py-3"
-        style={{ overflowY: "auto", background: "#E5DDD5" }}
-      >
-        {messages.map((message) => (
-          <Message
-            key={message._id}
-            message={message}
+        <div className="messages-area" ref={messagesAreaRef}>
+          <MessageList
+            messages={messages}
             currentUserId={currentUserId}
-            openImage={setPreviewImage}
+            messageRefs={messageRefs}
             setMessages={setMessages}
             setReplyMessage={setReplyMessage}
-            messageRefs={messageRefs}
+            openImage={setPreviewImage}
+            bottomRef={bottomRef}
           />
-        ))}
-        <div ref={bottomRef}></div>
+        </div>
+
+        <div className="floating-date-bar">
+          <span>{floatingDate || "Today"}</span>
+          <button
+            type="button"
+            className="scroll-bottom-btn"
+            onClick={() =>
+              bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
+            Scroll to bottom
+          </button>
+        </div>
+
+        <MessageInput
+          conversationId={selectedConversation._id}
+          receiverId={receiver._id}
+          setMessages={setMessages}
+          replyMessage={replyMessage}
+          setReplyMessage={setReplyMessage}
+        />
       </div>
 
-      <MessageInput
-        conversationId={selectedConversation._id}
-        receiverId={receiver._id}
-        setMessages={setMessages}
-        replyMessage={replyMessage}
-        setReplyMessage={setReplyMessage}
+      <ChatDetailsPanel
+        selectedConversation={selectedConversation}
+        isOnline={isOnline}
+        onClose={() => setShowDetails(false)}
+        onToggleArchive={toggleConversationArchive}
+        showDetails={showDetails}
       />
+
       <ImageModal image={previewImage} onClose={() => setPreviewImage("")} />
     </div>
   );

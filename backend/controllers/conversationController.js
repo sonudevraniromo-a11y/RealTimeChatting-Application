@@ -1,93 +1,46 @@
-const Conversation = require("../models/Conversation") ;
-const User = require("../models/userSchema") 
+const {
+  getConversationsForUser,
+  createOrReturnConversation,
+  markConversationRead,
+  toggleConversationArchive,
+} = require("../services/conversationService");
 
+exports.createConversation = async (req, res) => {
+  try {
+    const { receiverId } = req.body;
+    const senderId = req.user.userId;
 
-exports.createConversation = async ( req , res ) => {
-    try{
-        const {receiverId} = req.body ;
-        const senderId = req.user.userId ;
+    const { conversation, created } = await createOrReturnConversation(
+      senderId,
+      receiverId,
+    );
 
-        if (!receiverId) {
-          return res.status(400).json({
-            message: "Receiver ID is required",
-          });
-        }
-
-        if (senderId === receiverId) {
-          return res.status(400).json({
-            message: "You cannot create a conversation with yourself",
-          });
-        }
-
-        const receiver = await User.findById(receiverId) ;
-
-        if(!receiver) {
-            return res.status(404).json({
-                message :  "reciever User Not found"
-            })
-        }
-
-        const existingConvo = await Conversation.findOne({
-          participants: {
-            $size: 2,
-            $all: [senderId, receiverId],
-          },
-        }); 
-
-        if(existingConvo){
-            return res.status(200).json({
-                message : "existing conversation" ,
-                conversation : existingConvo
-            })
-        }
-
-        const convo = new Conversation({
-            participants : [senderId , receiverId ] ,
-        })
-
-        await convo.save() ;
-
-        return res.status(201).json({
-            message : "Conversation created successfully" ,
-            conversation : convo 
-        })
-  
-    }catch(error){
-        console.error(error);
-
-        return res.status(500).json({
-          message: "Internal Server Error",
-          error: error.message,
-        });
-    }
-}
+    return res.status(created ? 201 : 200).json({
+      message: created
+        ? "Conversation created successfully"
+        : "Existing conversation",
+      conversation,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(error.status || 500).json({
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
 
 exports.getConversations = async (req, res) => {
   try {
     const userId = req.user.userId;
-
-    const conversations = await Conversation.find({
-      participants: userId,
-    })
-      .populate("participants", "name avatar isOnline lastSeen")
-      .populate({
-        path: "lastMessage",
-        populate: {
-          path: "sender",
-          select: "name avatar",
-        },
-      })
-      .sort({ updatedAt: -1 });
+    const conversations = await getConversationsForUser(userId);
 
     return res.status(200).json({
       conversations,
     });
   } catch (error) {
     console.error(error);
-
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: error.message,
+    return res.status(error.status || 500).json({
+      message: error.message || "Internal Server Error",
     });
   }
 };
@@ -95,27 +48,39 @@ exports.getConversations = async (req, res) => {
 exports.markConversationRead = async (req, res) => {
   try {
     const { conversationId } = req.params;
-
     const userId = req.user.userId;
 
-    const convo = await Conversation.findById(conversationId);
+    await markConversationRead(conversationId, userId);
 
-    if (!convo) {
-      return res.status(404).json({
-        message: "Conversation not found",
-      });
-    }
+    return res.json({ message: "Marked as read" });
+  } catch (error) {
+    console.error(error);
+    return res.status(error.status || 500).json({
+      message: error.message || "Server Error",
+    });
+  }
+};
 
-    convo.unreadCount.set(userId, 0);
+exports.toggleConversationArchive = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.userId;
 
-    await convo.save();
+    const conversation = await toggleConversationArchive(
+      conversationId,
+      userId,
+    );
 
-    res.json({
-      message: "Marked as read",
+    return res.json({
+      message: conversation.archivedBy.includes(userId)
+        ? "Conversation archived"
+        : "Conversation unarchived",
+      conversation,
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Server Error",
+    console.error(error);
+    return res.status(error.status || 500).json({
+      message: error.message || "Server Error",
     });
   }
 };

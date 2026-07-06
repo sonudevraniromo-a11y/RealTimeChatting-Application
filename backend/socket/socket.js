@@ -2,11 +2,26 @@ const { Server } = require("socket.io");
 const onlineUsers = require("./onlineUsers");
 const { verifyAccessToken } = require("../services/tokenService");
 const { setIO } = require("./io");
+const User = require("../models/userSchema");
 
 function initializeSocket(server) {
+  const allowedOrigins = [
+    process.env.CLIENT_URL,
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+  ];
+
   const io = new Server(server, {
     cors: {
-      origin: `${process.env.CLIENT_URL}`,
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
     },
   });
@@ -14,18 +29,17 @@ function initializeSocket(server) {
   setIO(io);
 
   io.on("connection", (socket) => {
-    console.log("A user connected");
-    console.log("Socket ID:", socket.id);
-
-    socket.on("setup", (token) => {
+    socket.on("setup", async (token) => {
       try {
         const decoded = verifyAccessToken(token);
 
         onlineUsers.set(decoded.userId, socket.id);
 
-        io.emit("online_users", Array.from(onlineUsers.keys()));
+        await User.findByIdAndUpdate(decoded.userId, {
+          isOnline: true,
+        });
 
-        console.log(onlineUsers);
+        io.emit("online_users", Array.from(onlineUsers.keys()));
       } catch (error) {
         console.log("Invalid Token");
       }
@@ -49,12 +63,16 @@ function initializeSocket(server) {
       }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       console.log("User disconnected:", socket.id);
 
       for (const [userId, socketId] of onlineUsers.entries()) {
         if (socketId === socket.id) {
           onlineUsers.delete(userId);
+          await User.findByIdAndUpdate(userId, {
+            isOnline: false,
+            lastSeen: new Date(),
+          });
           break;
         }
       }

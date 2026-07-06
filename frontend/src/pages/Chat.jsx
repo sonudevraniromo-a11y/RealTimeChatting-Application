@@ -7,7 +7,7 @@ function Chat() {
   const [unreadChats, setUnreadChats] = useState({});
 
   return (
-    <div className="d-flex vh-100">
+    <div className="chat-page">
       <Sidebar
         selectedConversation={selectedConversation}
         setSelectedConversation={setSelectedConversation}
@@ -17,6 +17,7 @@ function Chat() {
 
       <ChatWindow
         selectedConversation={selectedConversation}
+        setSelectedConversation={setSelectedConversation}
         unreadChats={unreadChats}
         setUnreadChats={setUnreadChats}
       />

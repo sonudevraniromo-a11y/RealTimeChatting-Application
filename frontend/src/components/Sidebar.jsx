@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Archive, Filter, LogOut, Search, Settings, Star } from "lucide-react";
 import api from "../Services/api";
 import { useSocket } from "../context/SocketContext";
+import ConversationItem from "./ConversationItem";
+import {
+  getCurrentUser,
+  getCurrentUserId,
+  getCurrentUserName,
+} from "../utils/auth";
+import "../styles/chat.css";
 
 function Sidebar({
   selectedConversation,
@@ -11,12 +20,13 @@ function Sidebar({
   const [conversations, setConversations] = useState([]);
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState([]);
-
+  const [filter, setFilter] = useState("All");
+  const navigate = useNavigate();
   const { socket, onlineUsers } = useSocket();
 
-  const currentUserId = JSON.parse(
-    atob(localStorage.getItem("token").split(".")[1]),
-  ).userId;
+  const currentUser = getCurrentUser();
+  const currentUserId = getCurrentUserId();
+  const currentUserName = getCurrentUserName();
 
   useEffect(() => {
     fetchConversations();
@@ -51,7 +61,6 @@ function Sidebar({
 
     try {
       const response = await api.get(`/api/user/search?query=${value}`);
-
       setSearchResult(response.data);
     } catch (error) {
       console.log(error);
@@ -65,9 +74,7 @@ function Sidebar({
       });
 
       setSelectedConversation(response.data.conversation);
-
       await fetchConversations();
-
       setQuery("");
       setSearchResult([]);
     } catch (error) {
@@ -78,211 +85,196 @@ function Sidebar({
   async function openConversation(conversation) {
     try {
       setSelectedConversation(conversation);
-
       await api.patch(`/api/conversation/${conversation._id}/read`);
-
       fetchConversations();
     } catch (error) {
       console.log(error);
     }
   }
-  return (
-    <div
-      style={{
-        width: "360px",
-        borderRight: "1px solid #ddd",
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "#fff",
-      }}
-    >
-      <div
-        className="d-flex align-items-center justify-content-between px-3"
-        style={{
-          height: "70px",
-          background: "#F0F2F5",
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-        <h4 className="m-0">Chats</h4>
 
+  const filteredConversations = conversations.filter((conversation) => {
+    if (filter === "Unread") {
+      return (
+        conversation.unreadCount?.[currentUserId] > 0 ||
+        conversation.unreadCount?.get?.(currentUserId) > 0
+      );
+    }
+
+    if (filter === "Archived") {
+      return conversation.archivedBy?.some(
+        (user) => user === currentUserId || user?._id === currentUserId,
+      );
+    }
+
+    return true;
+  });
+
+  const pinnedConversations = conversations
+    .filter((conversation) => conversation.pinnedMessage)
+    .slice(0, 3);
+  const recentConversations = filteredConversations.filter(
+    (conversation) => !conversation.pinnedMessage,
+  );
+
+  return (
+    <aside className="chat-app chat-sidebar">
+      <div className="sidebar-panel">
+        <div className="sidebar-profile-bar">
+          <div className="sidebar-avatar-wrap">
+            <img
+              className="conversation-avatar"
+              src={`https://ui-avatars.com/api/?background=25D366&color=fff&name=${currentUserName}`}
+              alt="Current user"
+            />
+            <span className="online-dot" />
+          </div>
+
+          <div className="sidebar-profile-text">
+            <span className="sidebar-welcome">Welcome back</span>
+            <h5>{currentUserName}</h5>
+            <span className="sidebar-status">Active now</span>
+          </div>
+
+          <button
+            type="button"
+            className="icon-btn sidebar-settings-btn"
+            onClick={() => navigate("/settings")}
+            aria-label="Open settings"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+
+        <div className="sidebar-search-bar">
+          <Search size={18} />
+          <input
+            placeholder="Search chats or people"
+            value={query}
+            onChange={handleSearch}
+          />
+        </div>
+
+        <div className="sidebar-filter-row">
+          {[
+            { label: "All", icon: Filter },
+            { label: "Unread", icon: Star },
+            { label: "Archived", icon: Archive },
+          ].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              className={`btn-chip ${filter === option.label ? "active" : ""}`}
+              onClick={() => setFilter(option.label)}
+            >
+              <option.icon size={14} />
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {searchResult.length > 0 && (
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">Search results</div>
+            {searchResult.map((user) => (
+              <button
+                key={user._id}
+                className="search-result-item"
+                onClick={() => createConversation(user._id)}
+                type="button"
+              >
+                <div>
+                  <h6>{user.name}</h6>
+                  <small>{user.email}</small>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {pinnedConversations.length > 0 && (
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">Pinned chats</div>
+            {pinnedConversations.map((conversation) => {
+              const otherUser = conversation.participants.find(
+                (user) => user._id !== currentUserId,
+              );
+              const isOnline = onlineUsers.includes(otherUser._id);
+              return (
+                <button
+                  key={conversation._id}
+                  type="button"
+                  className="conversation-item compact"
+                  onClick={() => openConversation(conversation)}
+                >
+                  <div className="conversation-avatar-wrap">
+                    <img
+                      className="conversation-avatar"
+                      src={
+                        otherUser.avatar ||
+                        `https://ui-avatars.com/api/?background=25D366&color=fff&name=${otherUser.name}`
+                      }
+                      alt={otherUser.name}
+                    />
+                    {isOnline && <span className="online-dot" />}
+                  </div>
+                  <div className="conversation-info">
+                    <span className="conversation-name">{otherUser.name}</span>
+                    <span className="conversation-preview">
+                      {conversation.lastMessage?.text || "Last message preview"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="sidebar-section">
+          <div className="sidebar-section-title-row">
+            <span>Recent chats</span>
+            <span className="sidebar-count">{conversations.length}</span>
+          </div>
+
+          {recentConversations.map((conversation) => (
+            <ConversationItem
+              key={conversation._id}
+              conversation={conversation}
+              currentUserId={currentUserId}
+              onlineUsers={onlineUsers}
+              isActive={selectedConversation?._id === conversation._id}
+              onSelect={openConversation}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="sidebar-footer">
         <button
-          className="btn btn-light"
-          style={{
-            borderRadius: "50%",
-            width: "40px",
-            height: "40px",
+          type="button"
+          className="sidebar-action-button"
+          onClick={() => navigate("/settings")}
+        >
+          <Settings size={16} />
+          Settings
+        </button>
+        <button
+          type="button"
+          className="sidebar-action-button danger"
+          onClick={async () => {
+            try {
+              await api.post("/api/auth/logOut");
+            } catch (error) {
+              console.error(error);
+            }
+            localStorage.removeItem("token");
+            navigate("/");
           }}
         >
-          +
+          <LogOut size={16} />
+          Logout
         </button>
       </div>
-
-      <div className="p-3">
-        <input
-          className="form-control"
-          placeholder="🔍 Search users..."
-          value={query}
-          onChange={handleSearch}
-          style={{
-            borderRadius: "25px",
-            background: "#F5F5F5",
-            border: "none",
-            padding: "12px 18px",
-            boxShadow: "none",
-          }}
-        />
-      </div>
-
-      {searchResult.length > 0 && (
-        <>
-          <div className="px-3">
-            <strong>Search Results</strong>
-          </div>
-
-          {searchResult.map((user) => (
-            <div
-              key={user._id}
-              className="p-3 border-bottom"
-              style={{ cursor: "pointer" }}
-              onClick={() => createConversation(user._id)}
-            >
-              <h6>{user.name}</h6>
-              <small>{user.email}</small>
-            </div>
-          ))}
-
-          <hr />
-        </>
-      )}
-
-      <div className="px-3">
-        <strong>Conversations</strong>
-      </div>
-
-      {conversations.map((conversation) => {
-        const otherUser = conversation.participants.find(
-          (user) => user._id !== currentUserId,
-        );
-
-        const unreadCount = conversation.unreadCount?.[currentUserId] || 0;
-
-        const isOnline = onlineUsers.includes(otherUser._id);
-
-        return (
-          <div
-            key={conversation._id}
-            onClick={() => openConversation(conversation)}
-            className="d-flex align-items-center px-3"
-            style={{
-              cursor: "pointer",
-              height: "78px",
-              borderBottom: "1px solid #f0f0f0",
-              background:
-                selectedConversation?._id === conversation._id
-                  ? "#F0F2F5"
-                  : "#fff",
-              transition: "0.2s",
-            }}
-            onMouseEnter={(e) => {
-              if (selectedConversation?._id !== conversation._id)
-                e.currentTarget.style.background = "#f8f9fa";
-            }}
-            onMouseLeave={(e) => {
-              if (selectedConversation?._id !== conversation._id)
-                e.currentTarget.style.background = "#fff";
-            }}
-          >
-            <div style={{ position: "relative" }}>
-              <img
-                src={
-                  otherUser.avatar ||
-                  `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${otherUser.name}`
-                }
-                alt=""
-                style={{
-                  width: 55,
-                  height: 55,
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                }}
-              />
-
-              {isOnline && (
-                <span
-                  style={{
-                    position: "absolute",
-                    bottom: 2,
-                    right: 2,
-                    width: 13,
-                    height: 13,
-                    borderRadius: "50%",
-                    background: "#25D366",
-                    border: "2px solid white",
-                  }}
-                />
-              )}
-            </div>
-
-            <div
-              style={{
-                marginLeft: 15,
-                flex: 1,
-                overflow: "hidden",
-              }}
-            >
-              <div className="d-flex justify-content-between">
-                <strong>{otherUser.name}</strong>
-
-                <small style={{ color: "#888" }}>
-                  {conversation.lastMessage
-                    ? new Date(
-                        conversation.lastMessage.createdAt,
-                      ).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : ""}
-                </small>
-              </div>
-
-              <div
-                style={{
-                  color: "#666",
-                  fontSize: "14px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {conversation.lastMessage?.text || "Start chatting"}
-              </div>
-            </div>
-
-            {unreadCount > 0 && (
-              <div
-                style={{
-                  minWidth: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  background: "#25D366",
-                  color: "#fff",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                  marginLeft: 8,
-                }}
-              >
-                {unreadCount}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    </aside>
   );
 }
 

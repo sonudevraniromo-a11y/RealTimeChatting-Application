@@ -22,9 +22,23 @@ const path = require("path");
 
 const app = express();
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:5173", `${process.env.CLIENT_URL}`],
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );
@@ -47,11 +61,22 @@ app.use(cookieParser());
 // );
 app.use(morgon("dev"));
 
-app.use(errorMiddleware);
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/conversation", conversationRoutes);
 app.use("/api/message", messageRoutes);
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "uploads"), {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => {
+      res.setHeader("Cache-Control", "no-store");
+    },
+  }),
+);
+
+app.use(errorMiddleware);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "uploads"), {
@@ -76,6 +101,19 @@ const server = http.createServer(app);
 
 const io = initializeSocket(server);
 
-server.listen(5000, () => {
-  console.log("server is running at port : 5000 ");
+const PORT = process.env.PORT || 5000;
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(
+      `Port ${PORT} is already in use. Please stop the process using it or set a different PORT.`,
+    );
+    process.exit(1);
+  }
+  console.error("Server error:", error);
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
+  console.log(`server is running at port : ${PORT}`);
 });

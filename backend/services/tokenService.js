@@ -1,47 +1,51 @@
-const jwt = require("jsonwebtoken") ;
-const cookieParser = require("cookie-parser")
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 
-function generateAccessToken(user){
-    const accessToken = jwt.sign({
-        userId : user._id ,
-        email : user.email , 
-        role : user.role ,
+function generateAccessToken(user) {
+  const accessToken = jwt.sign(
+    {
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
     },
-        process.env.JWT_SECRET ,
+    process.env.JWT_SECRET,
     {
-        expiresIn : "15m"
-    }) ;
+      expiresIn: "15m",
+    },
+  );
 
-    return accessToken ;
+  return accessToken;
 }
 
-function generateRefreshToken(user){
-    const refreshToken = jwt.sign({
-        userId : user._id 
-    } , process.env.JWT_REFRESH_SECRET ,
+function generateRefreshToken(user) {
+  const refreshToken = jwt.sign(
     {
-        expiresIn : "7d"
-    }
-    )
+      userId: user._id,
+    },
+    process.env.JWT_REFRESH_SECRET,
+    {
+      expiresIn: "7d",
+    },
+  );
 
-    return refreshToken ;
+  return refreshToken;
 }
 
-function verifyAccessToken(token){
-    const  decoded = jwt.verify(
-        token , 
-        process.env.JWT_SECRET
-    ) ;
-    return decoded
+function verifyAccessToken(token) {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  return decoded;
 }
 
-function verifyRefreshToken(token){
-    const decoded = jwt.verify(
-        token , 
-        process.env.JWT_REFRESH_SECRET
-    )
+function verifyRefreshToken(token) {
+  const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 
-    return decoded ;
+  return decoded;
 }
 
-module.exports = {generateAccessToken , generateRefreshToken , verifyAccessToken , verifyRefreshToken}
+module.exports = {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+};
