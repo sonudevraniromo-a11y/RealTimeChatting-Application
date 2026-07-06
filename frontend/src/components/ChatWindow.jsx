@@ -21,7 +21,6 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
   const [currentMatch, setCurrentMatch] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [floatingDate, setFloatingDate] = useState("");
 
   const bottomRef = useRef(null);
   const firstLoad = useRef(true);
@@ -107,19 +106,6 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
 
         setMessages(response.data.messages);
         setPinnedMessage(response.data.conversation.pinnedMessage || null);
-        setFloatingDate(
-          response.data.messages.length
-            ? new Date(
-                response.data.messages[response.data.messages.length - 1]
-                  .createdAt,
-              ).toLocaleDateString([], {
-                weekday: "long",
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })
-            : "",
-        );
         await api.patch(`/api/message/seen/${selectedConversation._id}`);
       } catch (error) {
         console.log(error);
@@ -390,19 +376,6 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
             openImage={setPreviewImage}
             bottomRef={bottomRef}
           />
-        </div>
-
-        <div className="floating-date-bar">
-          <span>{floatingDate || "Today"}</span>
-          <button
-            type="button"
-            className="scroll-bottom-btn"
-            onClick={() =>
-              bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-            }
-          >
-            Scroll to bottom
-          </button>
         </div>
 
         <MessageInput
