@@ -7,6 +7,7 @@ import MessageInput from "./MessageInput";
 import ImageModal from "./ImageModal";
 import ChatDetailsPanel from "./ChatDetailsPanel";
 import { getCurrentUserId } from "../utils/auth";
+import { X } from "lucide-react";
 import "../styles/chat.css";
 
 function ChatWindow({ selectedConversation, setSelectedConversation }) {
@@ -21,11 +22,13 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
   const [currentMatch, setCurrentMatch] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
 
   const bottomRef = useRef(null);
   const firstLoad = useRef(true);
   const messageRefs = useRef({});
   const messagesAreaRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const currentUserId = getCurrentUserId();
 
@@ -70,12 +73,24 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
   }
 
   function handleSearchKeyDown(e) {
+    if (e.key === "Escape") {
+      closeSearch();
+      return;
+    }
+
     if (e.key !== "Enter") return;
     if (!matchedMessages.length) return;
 
     const next = (currentMatch + 1) % matchedMessages.length;
     setCurrentMatch(next);
     scrollToMessage(matchedMessages[next]._id);
+  }
+
+  function closeSearch() {
+    setShowSearch(false);
+    setSearch("");
+    setMatchedMessages([]);
+    setCurrentMatch(0);
   }
 
   function showStatus(message) {
@@ -96,6 +111,7 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
 
   useEffect(() => {
     firstLoad.current = true;
+    closeSearch();
     async function loadConversation() {
       if (!selectedConversation) return;
 
@@ -114,6 +130,12 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
 
     loadConversation();
   }, [selectedConversation]);
+
+  useEffect(() => {
+    if (showSearch) {
+      searchInputRef.current?.focus();
+    }
+  }, [showSearch]);
 
   useEffect(() => {
     const handleReceiveMessage = async (message) => {
@@ -325,7 +347,7 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
           typing={typing}
           isOnline={isOnline}
           onToggleDetails={() => setShowDetails((prev) => !prev)}
-          onSearchClick={() => document.getElementById("chat-search")?.focus()}
+          onSearchClick={() => setShowSearch(true)}
           onAudioCall={() => showStatus("Voice call coming soon.")}
           onVideoCall={() => showStatus("Video call coming soon.")}
         />
@@ -334,19 +356,30 @@ function ChatWindow({ selectedConversation, setSelectedConversation }) {
           <div className="chat-status-notice">{statusMessage}</div>
         )}
 
-        <div className="chat-search-bar">
-          <input
-            id="chat-search"
-            className="form-control"
-            placeholder="Search messages in this chat"
-            value={search}
-            onChange={handleSearch}
-            onKeyDown={handleSearchKeyDown}
-          />
-          <small className="text-muted">
-            Press Enter to move through matches ({matchedMessages.length})
-          </small>
-        </div>
+        {showSearch && (
+          <div className="chat-search-bar">
+            <input
+              ref={searchInputRef}
+              id="chat-search"
+              className="form-control"
+              placeholder="Search messages in this chat"
+              value={search}
+              onChange={handleSearch}
+              onKeyDown={handleSearchKeyDown}
+            />
+            <small className="text-muted">
+              Press Enter to move through matches ({matchedMessages.length})
+            </small>
+            <button
+              type="button"
+              className="chat-search-close"
+              onClick={closeSearch}
+              aria-label="Close search"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {pinnedMessage && (
           <div className="pinned-banner">
